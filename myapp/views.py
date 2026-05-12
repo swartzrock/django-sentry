@@ -1,22 +1,23 @@
-from __future__ import unicode_literals
+import json
 
 import sentry_sdk
-import json
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .serializers import InventorySerializer
 from .models import Inventory
+from .serializers import InventorySerializer
 
-InventoryData = [{"name": "wrench", "count": 1},  
-                 {"name": "nails", "count": 1}, 
+InventoryData = [{"name": "wrench", "count": 1},
+                 {"name": "nails", "count": 1},
                  {"name": "hammer", "count": 1}]
+
 
 def find_in_inventory(itemId):
     for item in InventoryData:
         if item['name'] == itemId:
             return item
     raise Exception("Item : " + itemId + " not in inventory ")
+
 
 def process_order(cart):
     global InventoryData
@@ -25,53 +26,46 @@ def process_order(cart):
         itemID = item['id']
         inventoryItem = find_in_inventory(itemID)
         if inventoryItem['count'] <= 0:
-            raise Exception("Not enough inventory for " + itemID) 
+            raise Exception("Not enough inventory for " + itemID)
         else:
             inventoryItem['count'] -= 1
-            print( 'Success: ' + itemID + ' was purchased, remaining stock is ' + str(inventoryItem['count']) )
+            print('Success: ' + itemID + ' was purchased, remaining stock is ' + str(inventoryItem['count']))
     InventoryData = tempInventory
 
-class SentryContextMixin(object):
+
+class SentryContextMixin:
 
     def dispatch(self, request, *args, **kwargs):
-        if (request.body):
+        if request.body:
             body_unicode = request.body.decode('utf-8')
             order = json.loads(body_unicode)
+            sentry_sdk.set_user({"email": order["email"]})
 
-            with sentry_sdk.configure_scope() as scope:
-                    scope.user = { "email" : order["email"] }
-            
         transactionId = request.headers.get('X-Transaction-ID')
         sessionId = request.headers.get('X-Session-ID')
-        
-        global InventoryData
 
-        with sentry_sdk.configure_scope() as scope:
-            if(transactionId):
-                scope.set_tag("transaction_id", transactionId)
+        if transactionId:
+            sentry_sdk.set_tag("transaction_id", transactionId)
+        if sessionId:
+            sentry_sdk.set_tag("session-id", sessionId)
+        if Inventory:
+            sentry_sdk.set_extra("inventory", InventoryData)
 
-            if(sessionId):
-                scope.set_tag("session-id", sessionId)
+        return super().dispatch(request, *args, **kwargs)
 
-            if(Inventory):
-                scope.set_extra("inventory", InventoryData)
 
-        return super(SentryContextMixin, self).dispatch(request, *args, **kwargs)
-
-# Create your views here.
 class InventoreyView(SentryContextMixin, APIView):
 
     def get(self, request):
         results = InventorySerializer(InventoryData, many=True).data
         return Response(results)
 
-
     def post(self, request, format=None):
         body_unicode = request.body.decode('utf-8')
         order = json.loads(body_unicode)
         cart = order['cart']
         process_order(cart)
-        return Response(InventoryData) 
+        return Response(InventoryData)
 
 
 class HandledErrorView(APIView):
@@ -82,9 +76,9 @@ class HandledErrorView(APIView):
             sentry_sdk.capture_exception(err)
         return Response()
 
+
 class UnHandledErrorView(APIView):
-     def get(self, request):
+    def get(self, request):
         obj = {}
         obj['keyDoesntExist']
         return Response()
-

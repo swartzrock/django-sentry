@@ -5,37 +5,27 @@
 - [Cleaning Up](#cleaning-up)
 
 ## Installing Dependencies
-This project uses Django 2.2 that requires Python 3
 
-1. Install Python 3:
-```
-brew install python3
-```
+This project requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
-2. Install `virtualenv` and `virtualenvwrapper`
+1. Install `uv`:
 ```
-pip3 install virtualenv virtualenvwrapper
-echo "source /usr/local/bin/virtualenvwrapper.sh" >> ~/.bashrc
-exec bash
+brew install uv
 ```
 
-3. Install Sentry's command line tool to use release tracking and Github integration for commit data:
+2. Install Sentry's command line tool for release tracking and commit integration:
 ```
 npm install -g @sentry/cli
 ```
 
-This demo uses npm, pip, and virtualenv.
-
 ## Configuring Sentry
 
-The Sentry client library requires a [DSN generated from Sentry](https://docs.sentry.io/quickstart/#configure-the-dsn) which  specifies the project events will be sent to. Add the import and configuration code to `settings.py`:
+The Sentry client library requires a [DSN generated from Sentry](https://docs.sentry.io/quickstart/#configure-the-dsn). Update `myproject/settings.py`:
 
- ```
-import sentry_sdk
-from sentry_sdk.integrations.django import DjangoIntegration
-
+```python
 sentry_sdk.init(
-    dsn="https://yourdsn@sentry.io/1234567"
+    dsn="https://yourdsn@sentry.io/1234567",
+    integrations=[DjangoIntegration()],
 )
 ```
 
@@ -43,60 +33,47 @@ Further details on configuring Sentry [here](https://docs.sentry.io/platforms/py
 
 ## Running The Demo
 
-Create a python-3 virtualenv (see below) and run `deploy` target in `Makefile`.
-
-### Virtualenv setup
-
-Setup and activate a Python 3 virtual environment in the project root:
-```
-mkvirtualenv --python=python3 sentry-demo-django
-```
-
-To use virtualenv:
-```
-workon sentry-demo-django
-```
-
-
-### Runing Django
-
-Running the following command will install relevant python libraries and run django server
+Install dependencies and start the server:
 ```
 make deploy
 ```
 
+This installs packages, creates a Sentry release, runs migrations, and starts the Django development server.
+
+You can also run each step individually:
+```
+make install    # install Python dependencies via uv
+make migrate    # run database migrations
+make run_django # start the development server
+```
 
 ### Demo Specs
 
-This demo uses Django's rest-framework package and offers 3 API endpoints:
-1. http://localhost:8000/handled - generates a runtime error excplicitly reported to Sentry though the SDk's captureException
-2. http://localhost:8000/unhandled - generates an unhandled runtime error reported
-3. http://localhost:8000/checkout - can be used with the [Sentry REACT demo store front demo](https://github.com/sentry-demos/react)
-    This endpoint can also be used with directly through the Django REST Framework web UI. To generate an error paste the following JSON payload in the POST payload text area:
+This demo uses Django REST Framework and exposes 3 API endpoints:
 
+1. `http://localhost:8000/handled` — generates a runtime error explicitly reported to Sentry via `capture_exception`
+2. `http://localhost:8000/unhandled` — generates an unhandled runtime error
+3. `http://localhost:8000/checkout` — used with the [Sentry React demo storefront](https://github.com/sentry-demos/react), or directly via the Django REST Framework web UI
 
-```
-    {
+To trigger an error via the `/checkout` endpoint, POST the following JSON:
+
+```json
+{
     "cart": [
         {"id": "wrench", "name": "Wrench", "price": 500},
         {"id": "wrench", "name": "Wrench", "price": 500}
     ],
     "email": "user@email.com"
-    }
+}
 ```
 
 ![Alt Text](django_demo_setup.gif)
 
 ## Cleaning Up
 
-Pressing Ctrl-C once in each terminal window should stop Django's development server.
+Press Ctrl-C to stop the Django development server.
 
-To deactivate the virtualenv sentry-demo-django:
+To remove the virtual environment created by uv:
 ```
-deactivate
-```
-
-To remove the virtualenv: 
-```
-rmvirtualenv sentry-demo-django
+rm -rf .venv
 ```
